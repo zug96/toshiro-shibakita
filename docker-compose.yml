@@ -1,0 +1,57 @@
+# version: '3.8' # Linha 'version' é obsoleta e pode ser removida/comentada
+
+services:
+  # Serviço do Banco de Dados MySQL
+  db:
+    image: mysql:8.0 # Usar imagem oficial do MySQL 8.0
+    container_name: mysql_db_toshiro # Nome do container
+    command: '--default-authentication-plugin=mysql_native_password' # Para compatibilidade
+    volumes:
+      - db_data:/var/lib/mysql # Volume nomeado para persistir os dados
+      - ./banco.sql:/docker-entrypoint-initdb.d/init.sql # Monta o SQL para inicializar o banco
+    environment:
+      MYSQL_ROOT_PASSWORD: root # Senha do root do MySQL (!! USE ALGO MAIS SEGURO !!)
+      MYSQL_DATABASE: toshiro_db # Nome do banco de dados
+    restart: unless-stopped # Reinicia se parar
+    networks:
+      - app-network # Conecta à rede interna
+
+  # Serviço da Aplicação PHP-FPM
+  app:
+    build:
+      context: . # Diretório atual
+      dockerfile: Dockerfile.php # Usa nosso Dockerfile.php customizado
+    container_name: php_app_toshiro
+    volumes:
+      - .:/var/www/html # Monta o diretório atual (com index.php) dentro do container
+    working_dir: /var/www/html
+    restart: unless-stopped
+    networks:
+      - app-network
+    depends_on: # Garante que o 'db' inicie antes
+      - db
+
+  # Serviço do Servidor Web Nginx
+  web:
+    image: nginx:latest # Usar a imagem oficial
+    container_name: nginx_web_toshiro
+    ports:
+      - "80:80" # Mapeia a porta 80 do HOST para a porta 80 do container
+    volumes:
+      - .:/var/www/html # Monta o código para o Nginx (se ele precisar servir algo estático)
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro # Monta nosso nginx.conf (read-only)
+    restart: unless-stopped
+    networks:
+      - app-network
+    depends_on: # Garante que a 'app' (PHP) inicie antes
+      - app
+
+# Define a rede interna
+networks:
+  app-network:
+    driver: bridge
+
+# Define o volume nomeado
+volumes:
+  db_data:
+    driver: local
